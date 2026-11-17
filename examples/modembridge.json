@@ -1,0 +1,25 @@
+{
+  "modem": {
+    "device": "/dev/ttyACM0",
+    "baud": 19200,
+    "hardware_flow_control": true,
+    "write_timeout_seconds": 30,
+    "monitor_carrier": true,
+    "answer_after_rings": 1,
+    "negotiation_seconds": 45,
+    "init": [
+      { "send": "AT&F1", "expect": "OK", "timeout_seconds": 3 },
+      { "send": "AT&B1&C1&D2&M0&K0", "expect": "OK", "timeout_seconds": 3 }
+    ]
+  },
+  "routes": [
+    { "protocol": "millennium", "mode": "connect", "address": "127.0.0.1:27274", "transport": "raw" },
+    { "protocol": "jatena", "mode": "connect", "address": "127.0.0.1:27275", "transport": "raw" }
+  ],
+  "identification_seconds": 10,
+  "max_identification_bytes": 65536,
+  "backend_seconds": 5,
+  "idle_seconds": 120,
+  "max_session_seconds": 1800,
+  "recovery_seconds": 2
+}
