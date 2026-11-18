@@ -43,6 +43,69 @@ func (p *testPort) Read(b []byte) (int, error) {
 	return n, err
 }
 
+func TestReconnectAfterModemDisappears(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	c := config.Config{
+		Modem: config.Modem{Device: "stable-device-id", Baud: 19200, AnswerAfterRings: 1, NegotiationSeconds: 2},
+		Routes: []config.Route{{Protocol: "millennium", Mode: "connect", Address: "127.0.0.1:27276", Transport: "raw"}},
+		IdentificationSeconds: 2, MaxIdentificationBytes: 1024, BackendSeconds: 2, IdleSeconds: 3, MaxSessionSeconds: 6, RecoverySeconds: 1,
+	}
+	var attempts atomic.Int32
+	reconnected := make(chan struct{})
+	s := Service{Config: c, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	s.Open = func(config.Modem) (*modem.Modem, error) {
+		switch attempts.Add(1) {
+		case 1:
+			local, peer := net.Pipe()
+			go func() {
+				defer peer.Close()
+				r := bufio.NewReader(peer)
+				for i := 0; i < 2; i++ {
+					if _, err := r.ReadString('\r'); err != nil {
+						return
+					}
+					if _, err := peer.Write([]byte("OK\r\n")); err != nil {
+						return
+					}
+				}
+				// The USB device disappears while waiting for a call.
+			}()
+			return modem.New(&testPort{Conn: local}, false)
+		case 2:
+			return nil, errors.New("device not present")
+		default:
+			local, peer := net.Pipe()
+			go func() {
+				defer peer.Close()
+				r := bufio.NewReader(peer)
+				for i := 0; i < 2; i++ {
+					if _, err := r.ReadString('\r'); err != nil {
+						return
+					}
+					if _, err := peer.Write([]byte("OK\r\n")); err != nil {
+						return
+					}
+				}
+				close(reconnected)
+				<-ctx.Done()
+			}()
+			return modem.New(&testPort{Conn: local}, false)
+		}
+	}
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	select {
+	case <-reconnected:
+		cancel()
+	case <-ctx.Done():
+		t.Fatal("service did not retry after the modem disappeared")
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTwoCallsWithDifferentBackends(t *testing.T) {
 	mm := []byte{2, 0, 6, 0x24}
 	crc := protocol.CRC16(mm)

@@ -8,19 +8,26 @@ import (
 
 var ErrAmbiguous = errors.New("ambiguous protocol")
 
+// detectors is the single registry of supported protocol names and their
+// opening-frame detectors. Detectors must not modify the supplied bytes.
+var detectors = map[string]func([]byte) bool{
+	"millennium": millennium,
+	"jatena":     jatena,
+}
+
+// Supported reports whether a protocol can be identified.
+func Supported(name string) bool {
+	_, ok := detectors[name]
+	return ok
+}
+
 // Detect scans the bounded opening buffer. No match means more input is needed.
 // Every byte, including noise before a valid frame, is retained by the caller.
 func Detect(data []byte, enabled []string) (string, error) {
 	match := ""
 	for _, name := range enabled {
-		valid := false
-		switch name {
-		case "millennium":
-			valid = millennium(data)
-		case "jatena":
-			valid = jatena(data)
-		}
-		if valid {
+		detect, ok := detectors[name]
+		if ok && detect(data) {
 			if match != "" && match != name {
 				return "", ErrAmbiguous
 			}

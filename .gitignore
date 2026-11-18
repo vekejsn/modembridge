@@ -1,4 +1,5 @@
 /bin/
+/modembridge
 *.test
 /modembridge.json
 __pycache__/

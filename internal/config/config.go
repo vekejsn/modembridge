@@ -9,6 +9,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"modembridge/internal/protocol"
 )
 
 type Command struct {
@@ -110,7 +112,7 @@ func (c *Config) Validate() error {
 	seen := map[string]bool{}
 	for i := range c.Routes {
 		r := &c.Routes[i]
-		if r.Protocol != "millennium" && r.Protocol != "jatena" {
+		if !protocol.Supported(r.Protocol) {
 			return fmt.Errorf("unsupported protocol %q", r.Protocol)
 		}
 		if seen[r.Protocol] {

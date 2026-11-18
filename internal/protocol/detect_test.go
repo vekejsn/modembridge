@@ -57,6 +57,21 @@ func TestDetection(t *testing.T) {
 	}
 }
 
+func TestRegistry(t *testing.T) {
+	const name = "test-protocol"
+	detectors[name] = func(data []byte) bool { return bytes.Equal(data, []byte("test")) }
+	t.Cleanup(func() { delete(detectors, name) })
+	if !Supported(name) || Supported("unknown") {
+		t.Fatal("registry support lookup failed")
+	}
+	if got, err := Detect([]byte("test"), []string{name}); got != name || err != nil {
+		t.Fatalf("registered detector: got %q, %v", got, err)
+	}
+	if got, err := Detect([]byte("test"), []string{"unknown"}); got != "" || err != nil {
+		t.Fatalf("unknown detector: got %q, %v", got, err)
+	}
+}
+
 func TestMillenniumPayloadDelimiters(t *testing.T) {
 	f := []byte{2, 0, 9, 1, 2, 3, 0x1b}
 	crc := CRC16(f)
