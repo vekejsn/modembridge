@@ -15,6 +15,7 @@ Payphone → telephone line → modem → ModemBridge → Server of your choice
 | Payphone type | Protocol | Description |
 |---------------|----------|-------------|
 | Millennium | Bell 212A | Detected using the known start/stop bytes `02`& `03` and CRC16 at end |
+| Millennium TTY | Bell 212A | Identification frame: `02`, length `25`, command `82` or `C2`, payload, CRC16 (little-endian), `03`. The length counts the command and payload bytes. |
 | Jatena | V.21 | Detected using the known start/stop bytes `01` & `03`, control bytes, and FCC checksum at end |
 
 
