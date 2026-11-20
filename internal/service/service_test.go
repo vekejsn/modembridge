@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -43,12 +44,38 @@ func (p *testPort) Read(b []byte) (int, error) {
 	return n, err
 }
 
+func TestMissingModemRetriesWithoutLogSpam(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c := config.Config{
+		Modem:                 config.Modem{Device: "missing", Baud: 19200, AnswerAfterRings: 1, NegotiationSeconds: 2},
+		Routes:                []config.Route{{Protocol: "millennium", Mode: "connect", Address: "127.0.0.1:27276", Transport: "raw"}},
+		IdentificationSeconds: 2, MaxIdentificationBytes: 1024, BackendSeconds: 2, IdleSeconds: 3, MaxSessionSeconds: 6, RecoverySeconds: 1,
+	}
+	var logs bytes.Buffer
+	var attempts int
+	s := Service{Config: c, Log: slog.New(slog.NewTextHandler(&logs, nil))}
+	s.Open = func(config.Modem) (*modem.Modem, error) {
+		attempts++
+		if attempts == 3 {
+			cancel()
+		}
+		return nil, os.ErrNotExist
+	}
+	if err := s.Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 3 || strings.Count(logs.String(), "modem device unavailable") != 1 {
+		t.Fatalf("attempts=%d, logs=%q", attempts, logs.String())
+	}
+}
+
 func TestReconnectAfterModemDisappears(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	c := config.Config{
-		Modem: config.Modem{Device: "stable-device-id", Baud: 19200, AnswerAfterRings: 1, NegotiationSeconds: 2},
-		Routes: []config.Route{{Protocol: "millennium", Mode: "connect", Address: "127.0.0.1:27276", Transport: "raw"}},
+		Modem:                 config.Modem{Device: "stable-device-id", Baud: 19200, AnswerAfterRings: 1, NegotiationSeconds: 2},
+		Routes:                []config.Route{{Protocol: "millennium", Mode: "connect", Address: "127.0.0.1:27276", Transport: "raw"}},
 		IdentificationSeconds: 2, MaxIdentificationBytes: 1024, BackendSeconds: 2, IdleSeconds: 3, MaxSessionSeconds: 6, RecoverySeconds: 1,
 	}
 	var attempts atomic.Int32

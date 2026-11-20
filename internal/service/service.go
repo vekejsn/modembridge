@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
@@ -20,8 +21,9 @@ type Service struct {
 	Config config.Config
 	Log    *slog.Logger
 	// Open is injectable so the complete call lifecycle can be tested without hardware.
-	Open      func(config.Modem) (*modem.Modem, error)
-	endpoints map[string]*backend.Endpoint
+	Open           func(config.Modem) (*modem.Modem, error)
+	endpoints      map[string]*backend.Endpoint
+	lastMissingLog time.Time
 }
 
 func (s *Service) Run(ctx context.Context) error {
@@ -52,8 +54,16 @@ func (s *Service) Run(ctx context.Context) error {
 		if ctx.Err() != nil {
 			break
 		}
-		if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if s.lastMissingLog.IsZero() || time.Since(s.lastMissingLog) >= time.Minute {
+				s.Log.Warn("modem device unavailable; retrying", "device", s.Config.Modem.Device, "error", err)
+				s.lastMissingLog = time.Now()
+			}
+		} else if err != nil {
+			s.lastMissingLog = time.Time{}
 			s.Log.Warn("modem cycle ended", "error", err)
+		} else {
+			s.lastMissingLog = time.Time{}
 		}
 		timer := time.NewTimer(time.Duration(s.Config.RecoverySeconds) * time.Second)
 		select {
@@ -80,6 +90,7 @@ func (s *Service) call(ctx context.Context) error {
 	if err = m.Initialize(ctx, s.Config.Modem); err != nil {
 		return err
 	}
+	s.lastMissingLog = time.Time{}
 	s.Log.Info("modem ready", "device", s.Config.Modem.Device)
 	connection, err := m.Answer(ctx, s.Config.Modem)
 	if err != nil {

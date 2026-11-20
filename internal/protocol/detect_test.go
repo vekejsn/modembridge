@@ -81,6 +81,24 @@ func TestMillenniumPayloadDelimiters(t *testing.T) {
 	}
 }
 
+func TestMillenniumTTYIdentification(t *testing.T) {
+	// Captured TTY identification payload, with its original CRC.
+	frame := bytesFromHex(t, "022582051234567890073036434e4230330456312e300101072026111811450621102101230100e57803")
+	for i := range frame {
+		got, err := Detect(frame[:i], []string{"millennium"})
+		if err != nil || got != "" {
+			t.Fatalf("premature TTY match at %d: %q %v", i, got, err)
+		}
+	}
+	if got, err := Detect(append([]byte{0xff}, frame...), []string{"millennium"}); got != "millennium" || err != nil {
+		t.Fatalf("TTY identification: %q %v", got, err)
+	}
+	frame[len(frame)-2] ^= 1
+	if got, err := Detect(frame, []string{"millennium"}); got != "" || err != nil {
+		t.Fatalf("corrupt TTY frame accepted: %q %v", got, err)
+	}
+}
+
 func TestOriginalJatenaXIDOpening(t *testing.T) {
 	// RS232.PRG KOM_read: control 0x07, echoed using the first 21 wire bytes.
 	// FCC is literal: sum(0x07 + 16 * 0x20) = 0x0207 => 0x87, 0x84.

@@ -54,7 +54,19 @@ func CRC16(data []byte) uint16 {
 
 func millennium(data []byte) bool {
 	for i := 0; i+6 <= len(data); i++ {
-		if data[i] != 2 || data[i+2] < 5 {
+		if data[i] != 2 {
+			continue
+		}
+		// The TTY identification uses a different header from management:
+		// STX, length, command, payload, CRC, ETX.
+		if data[i+1] == 37 && data[i+2]&0xbf == 0x82 && i+42 <= len(data) {
+			f := data[i : i+42]
+			if f[3] == 5 && f[9] == 7 && f[17] == 4 && f[22] == 1 && f[24] == 7 &&
+				f[41] == 3 && CRC16(f[:39]) == binary.LittleEndian.Uint16(f[39:41]) {
+				return true
+			}
+		}
+		if data[i+2] < 5 {
 			continue
 		}
 		n := int(data[i+2]) + 1 // LEN excludes START, includes FLAGS through END.
